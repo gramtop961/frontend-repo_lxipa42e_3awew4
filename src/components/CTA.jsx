@@ -1,15 +1,42 @@
 import React, { useState } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 
 const CTA = () => {
   const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState(null); // { type: 'success' | 'error' | 'info', message: string }
 
-  const onSubmit = (e) => {
+  const backend = import.meta.env.VITE_BACKEND_URL;
+
+  const onSubmit = async (e) => {
     e.preventDefault();
-    if (!email) return;
-    // In a real app, this would POST to your backend/waitlist tool
-    alert(`Thanks! We'll be in touch at ${email}.`);
-    setEmail('');
+    if (!email || !backend) return;
+
+    setLoading(true);
+    setStatus(null);
+
+    try {
+      const res = await fetch(`${backend}/waitlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, source: 'cta' }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data?.detail || 'Something went wrong.');
+
+      if (data.status === 'exists') {
+        setStatus({ type: 'info', message: data.message || "You're already on the list." });
+      } else {
+        setStatus({ type: 'success', message: data.message || "You're on the waitlist!" });
+      }
+      setEmail('');
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message || 'Failed to join the waitlist.' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -28,11 +55,32 @@ const CTA = () => {
           />
           <button
             type="submit"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-blue-500/25 transition hover:bg-blue-400"
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-blue-500/25 transition hover:bg-blue-400 disabled:opacity-60"
           >
-            Join waitlist <ArrowRight className="h-4 w-4" />
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Submitting
+              </>
+            ) : (
+              <>
+                Join waitlist <ArrowRight className="h-4 w-4" />
+              </>
+            )}
           </button>
         </form>
+        {status && (
+          <div className="mx-auto mt-4 flex max-w-xl items-center justify-center gap-2 text-sm">
+            {status.type === 'success' && <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
+            {status.type === 'info' && <CheckCircle2 className="h-4 w-4 text-blue-400" />}
+            {status.type === 'error' && <XCircle className="h-4 w-4 text-red-400" />}
+            <p className={`text-zinc-300`}>{status.message}</p>
+          </div>
+        )}
+        {!backend && (
+          <p className="mx-auto mt-3 max-w-xl text-xs text-zinc-500">Backend URL not configured. Set VITE_BACKEND_URL to enable submissions.</p>
+        )}
         <p className="mt-3 text-xs text-zinc-500">No spam. Unsubscribe anytime.</p>
       </div>
     </section>
